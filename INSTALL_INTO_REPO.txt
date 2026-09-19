@@ -1,0 +1,11 @@
+MERGE these folders into the root of your existing Foreign-Tongues-for-Laymen repository.
+
+This package is additive. It is designed to expand the existing `reference/` and `docs/` folders and should not replace your root README.md, English_xml.pak, IPL_english.pak, corpus/, or mod/ folders.
+
+After extraction, GitHub Desktop should show the new README/template files as changes. Commit and push them normally.
+
+Recommended next source additions:
+1. Czech localization pack or extracted XML/text
+2. German localization pack or extracted XML/text
+3. French localization pack or extracted XML/text
+4. Other official localization languages as available
