@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
-Write-Host "FTFL Rosetta Toolbox" -ForegroundColor Cyan
+Write-Host "FTFL Rosetta Toolbox v0.2" -ForegroundColor Cyan
 Write-Host "Repository: $repo"
 
 $py = Get-Command python -ErrorAction SilentlyContinue
@@ -18,3 +18,4 @@ if ($LASTEXITCODE -ne 0) { throw "Alignment validation failed." }
 
 Write-Host "`nRosetta dataset ready." -ForegroundColor Green
 Write-Host "reference\aligned\localization_alignment.csv"
+Write-Host "reference\aligned\direct_reference_pairs.csv"
