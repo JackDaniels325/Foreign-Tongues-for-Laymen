@@ -1,1 +1,3 @@
-reference/aligned/localization_alignment.csv
+# Rosetta generated/extracted reference data
+reference/localization/*/text_ui_dialog.xml
+reference/aligned/*.csv
