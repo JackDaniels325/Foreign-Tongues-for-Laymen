@@ -1,0 +1,13 @@
+Merge this ZIP into the root of the Foreign-Tongues-for-Laymen repository.
+
+Expected additions:
+  tools/extract_dialogue.py
+  tools/build_alignment.py
+  tools/validate_alignment.py
+  tools/run_rosetta.ps1
+  docs/TOOLBOX.md
+
+Then run from the repository root:
+  powershell -ExecutionPolicy Bypass -File .\tools\run_rosetta.ps1
+
+This does not modify the game's PAK files.
