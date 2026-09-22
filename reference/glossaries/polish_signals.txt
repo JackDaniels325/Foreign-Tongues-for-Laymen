@@ -1,0 +1,26 @@
+# FTFL Polish detection signals
+
+tak
+nie
+pan
+panie
+pani
+boże
+boze
+kurwa
+cholera
+dobrze
+dzień
+dzien
+dobry
+dziękuję
+dziekuje
+proszę
+prosze
+człowiek
+czlowiek
+przyjaciel
+bracie
+co robisz
+jak się
+jak sie

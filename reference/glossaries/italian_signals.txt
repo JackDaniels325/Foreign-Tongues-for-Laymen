@@ -1,0 +1,19 @@
+# FTFL Italian detection signals
+
+buongiorno
+buona sera
+signore
+signora
+amico
+amico mio
+grazie
+prego
+dio
+mio dio
+per favore
+bene
+molto bene
+capisco
+non capisco
+che cosa
+andiamo

@@ -1,0 +1,33 @@
+# FTFL Czech detection signals
+# Seed list only; expand from verified corpus hits.
+
+ano
+ne
+dobrý
+dobry
+den
+děkuji
+dekuji
+prosím
+prosim
+pane
+pan
+bože
+boze
+sakra
+kurva
+co
+jak
+kde
+proč
+proc
+pojď
+pojd
+pojďte
+pojdte
+dobře
+dobre
+špatně
+spatne
+čert
+cert

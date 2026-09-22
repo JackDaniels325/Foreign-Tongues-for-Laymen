@@ -1,0 +1,19 @@
+# FTFL Arabic detection signals
+# Intended especially for unusual learned/traveler dialogue.
+# Conservative seed list.
+
+salaam
+salam
+as-salamu
+assalamu
+alaykum
+allah
+inshallah
+in sha allah
+mashallah
+ma sha allah
+alhamdulillah
+bismillah
+habibi
+ya allah
+wallah

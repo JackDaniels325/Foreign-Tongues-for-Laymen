@@ -1,0 +1,26 @@
+# FTFL Yiddish / Hebrew detection signals
+# Seed list only; expand from verified corpus hits.
+
+mazel
+mazel tov
+shalom
+schalom
+baruch
+barukh
+hashem
+ha-shem
+borekh
+oy
+oy vey
+meshugge
+meshuggah
+goy
+goyim
+rebbe
+rabbi
+kosher
+tov
+l'chaim
+chaim
+shabbos
+shabbat

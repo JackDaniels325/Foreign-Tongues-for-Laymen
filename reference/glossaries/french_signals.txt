@@ -1,0 +1,19 @@
+# FTFL French detection signals
+
+bonjour
+bonsoir
+monsieur
+madame
+mon ami
+merci
+s'il vous plaît
+sil vous plait
+mon dieu
+pardonnez
+pardon
+très bien
+tres bien
+je comprends
+je ne comprends pas
+voilà
+voila

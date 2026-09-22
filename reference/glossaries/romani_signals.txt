@@ -1,0 +1,53 @@
+# FTFL Romani detection signals
+# Seed list only; expand from verified corpus hits.
+
+bachtalo
+t'aves
+taves
+džal
+djal
+čhavo
+chavo
+čhave
+chave
+gadžo
+gadjo
+gadže
+gadje
+rom
+roma
+romani
+sastipe
+devlesa
+baxt
+baxtalo
+miri
+moro
+tu
+tumaro
+amen
+mande
+tuke
+kaj
+so
+na
+
+bachtalo
+baxtalo
+t'aves bachtalo
+taves bachtalo
+džal
+djal
+čhavo
+chavo
+čhave
+chave
+gadžo
+gadjo
+gadže
+gadje
+devlesa
+sastipe
+baxt
+tumaro
+romani

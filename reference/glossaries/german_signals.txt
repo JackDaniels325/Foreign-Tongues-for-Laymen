@@ -1,0 +1,65 @@
+# FTFL German detection signals
+# One token or phrase per line. Case-insensitive.
+# Multi-word entries are encouraged because they provide stronger evidence.
+
+aber
+ach
+also
+auf
+auch
+das
+dein
+deine
+deiner
+dich
+die
+dir
+doch
+ein
+eine
+einer
+euch
+für
+freund
+gleichen
+gott
+grüß
+gruss
+gut
+herr
+hintern
+ich
+ist
+ja
+junger
+klar
+kommt
+lassen wir das
+mein
+meine
+meiner
+mann
+man
+mich
+nicht
+nichts
+natürlich
+rettung
+sache
+scheiße
+scheißkerle
+schurken
+schön
+schönen tag
+seele
+sünde
+und
+verdammte
+verdammt
+verstehe
+von
+warum
+was
+wenn
+wohl
+zum glück

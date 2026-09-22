@@ -1,0 +1,23 @@
+# FTFL Slovak detection signals
+# Lower-confidence family; useful for characters such as Janosh.
+
+áno
+ano
+nie
+dobrý
+dobry
+deň
+den
+ďakujem
+dakujem
+prosím
+prosim
+pane
+bože
+boze
+priateľ
+priatel
+chlapec
+dobre
+poď
+pod
