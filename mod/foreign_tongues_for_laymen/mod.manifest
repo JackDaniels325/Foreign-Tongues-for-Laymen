@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<kcd_mod>
+  <info>
+    <name>Foreign Tongues for Laymen</name>
+    <modid>foreign_tongues_for_laymen</modid>
+    <description>Foreign-language subtitle translation support for Kingdom Come: Deliverance II.</description>
+    <author>JackDaniels325</author>
+    <version>0.2-playtest</version>
+    <created_on>2026-09-21</created_on>
+  </info>
+</kcd_mod>
