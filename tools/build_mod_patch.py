@@ -85,6 +85,7 @@ def load_approved(path: Path) -> dict[str, dict[str, str]]:
             raise SystemExit("approved.csv has no header")
 
         missing = required - set(reader.fieldnames)
+
         if missing:
             raise SystemExit(
                 "approved.csv missing columns: "
@@ -101,8 +102,13 @@ def load_approved(path: Path) -> dict[str, dict[str, str]]:
                 duplicates.append(key)
                 continue
 
-            line_type = (row.get("line_type") or "").strip().lower()
-            meaning = (row.get("verified_meaning") or "").strip()
+            line_type = (
+                row.get("line_type") or ""
+            ).strip().lower()
+
+            meaning = (
+                row.get("verified_meaning") or ""
+            ).strip()
 
             if not meaning:
                 raise SystemExit(
@@ -146,6 +152,7 @@ def apply_mixed(
     fragment: str,
     meaning: str,
 ) -> str:
+
     if not fragment:
         raise ValueError(
             "mixed-language line requires foreign_fragment"
@@ -173,14 +180,23 @@ def apply_full_foreign(
     original: str,
     meaning: str,
 ) -> str:
+
     clear_cell(display_cell)
 
     display_cell.text = original
 
-    br = ET.SubElement(display_cell, "br")
+    br = ET.SubElement(
+        display_cell,
+        "br",
+    )
+
     br.tail = f"[English] {meaning}"
 
-    return f"{original}<br/>[English] {meaning}"
+    return (
+        f"{original}"
+        f"<br/>"
+        f"[English] {meaning}"
+    )
 
 
 def patch_xml(
@@ -189,12 +205,13 @@ def patch_xml(
     approved: dict[str, dict[str, str]],
     allow_source_mismatch: bool,
 ) -> list[tuple[str, str]]:
+
     if not base_xml.exists():
         raise SystemExit(
             f"Missing extracted English XML: {base_xml}"
         )
 
-    print(f"Loading base localization:")
+    print("Loading base localization:")
     print(f"  {base_xml}")
 
     tree = ET.parse(base_xml)
@@ -204,6 +221,7 @@ def patch_xml(
     applied: list[tuple[str, str]] = []
 
     for row in root.iter():
+
         if row.tag.rsplit("}", 1)[-1] != "Row":
             continue
 
@@ -220,7 +238,10 @@ def patch_xml(
         entry = approved[key]
 
         base_display = visible_text(cells[2])
-        expected = entry["original_display_text"]
+
+        expected = entry[
+            "original_display_text"
+        ]
 
         if (
             expected
@@ -232,23 +253,34 @@ def patch_xml(
                 f"Key:      {key}\n"
                 f"Expected: {expected}\n"
                 f"Current:  {base_display}\n\n"
-                "Verify the game line before building, or use "
-                "--allow-source-mismatch for deliberate testing."
+                "Verify the game line before building, "
+                "or use --allow-source-mismatch "
+                "for deliberate testing."
             )
 
         original = expected or base_display
-        meaning = entry["verified_meaning"]
-        line_type = entry["line_type"].lower()
+
+        meaning = entry[
+            "verified_meaning"
+        ]
+
+        line_type = entry[
+            "line_type"
+        ].lower()
 
         try:
+
             if line_type in MIXED_TYPES:
+
                 rendered = apply_mixed(
                     cells[2],
                     original,
                     entry["foreign_fragment"],
                     meaning,
                 )
+
             else:
+
                 rendered = apply_full_foreign(
                     cells[2],
                     original,
@@ -256,21 +288,34 @@ def patch_xml(
                 )
 
         except ValueError as exc:
-            raise SystemExit(f"{key}: {exc}")
+            raise SystemExit(
+                f"{key}: {exc}"
+            )
 
         found.add(key)
-        applied.append((key, rendered))
 
-    missing = sorted(set(approved) - found)
+        applied.append(
+            (
+                key,
+                rendered,
+            )
+        )
+
+    missing = sorted(
+        set(approved) - found
+    )
 
     if missing:
         raise SystemExit(
-            "Approved localization keys were not found in "
-            "English text_ui_dialog.xml:\n"
+            "Approved localization keys were not found "
+            "in English text_ui_dialog.xml:\n"
             + "\n".join(missing)
         )
 
-    output_xml.parent.mkdir(parents=True, exist_ok=True)
+    output_xml.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
     tree.write(
         output_xml,
@@ -289,6 +334,7 @@ def write_manifest(
     version: str,
     author: str,
 ) -> None:
+
     manifest = f"""<?xml version="1.0" encoding="utf-8"?>
 <kcd_mod>
   <info>
@@ -302,6 +348,12 @@ def write_manifest(
 </kcd_mod>
 """
 
+    # Ensure the mod root exists before creating mod.manifest.
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
     path.write_text(
         manifest,
         encoding="utf-8",
@@ -313,18 +365,21 @@ def build_localization_pak(
     source_xml: Path,
     pak_path: Path,
 ) -> None:
-    pak_path.parent.mkdir(parents=True, exist_ok=True)
+
+    pak_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
     if pak_path.exists():
         pak_path.unlink()
 
-    # KCD2 expects standard ZIP-compatible PAK archives.
-    # ZIP_STORED means no compression.
     with zipfile.ZipFile(
         pak_path,
         "w",
         compression=zipfile.ZIP_STORED,
     ) as pak:
+
         pak.write(
             source_xml,
             arcname="text_ui_dialog.xml",
@@ -335,7 +390,11 @@ def build_vortex_zip(
     mod_root: Path,
     zip_path: Path,
 ) -> None:
-    zip_path.parent.mkdir(parents=True, exist_ok=True)
+
+    zip_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
     if zip_path.exists():
         zip_path.unlink()
@@ -347,23 +406,32 @@ def build_vortex_zip(
         compresslevel=6,
     ) as archive:
 
-        for file in sorted(mod_root.rglob("*")):
+        for file in sorted(
+            mod_root.rglob("*")
+        ):
+
             if not file.is_file():
                 continue
 
-            relative = file.relative_to(mod_root.parent)
+            relative = file.relative_to(
+                mod_root.parent
+            )
 
             archive.write(
                 file,
-                arcname=str(relative).replace("\\", "/"),
+                arcname=str(
+                    relative
+                ).replace("\\", "/"),
             )
 
 
 def main() -> int:
+
     parser = argparse.ArgumentParser(
         description=(
-            "Build a Vortex-installable Foreign Tongues "
-            "for Laymen KCD2 playtest package."
+            "Build a Vortex-installable "
+            "Foreign Tongues for Laymen "
+            "KCD2 playtest package."
         )
     )
 
@@ -412,18 +480,33 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    repo = Path(args.repo).resolve()
+    repo = Path(
+        args.repo
+    ).resolve()
 
-    if not MODID_RE.fullmatch(args.modid):
+    if not MODID_RE.fullmatch(
+        args.modid
+    ):
         raise SystemExit(
-            "modid must contain lowercase letters "
-            "and underscores only"
+            "modid must contain lowercase "
+            "letters and underscores only"
         )
 
-    approved_path = repo / args.approved
-    base_xml = repo / args.base
+    approved_path = (
+        repo
+        / args.approved
+    )
 
-    mod_root = repo / "mod" / args.modid
+    base_xml = (
+        repo
+        / args.base
+    )
+
+    mod_root = (
+        repo
+        / "mod"
+        / args.modid
+    )
 
     staging_xml = (
         repo
@@ -448,25 +531,55 @@ def main() -> int:
     dist_zip = (
         repo
         / "dist"
-        / f"Foreign-Tongues-for-Laymen-{safe_version}.zip"
+        / (
+            "Foreign-Tongues-for-Laymen-"
+            f"{safe_version}.zip"
+        )
     )
 
     print("FTFL Mod Patch Builder")
     print(f"Repository: {repo}")
     print()
 
-    approved = load_approved(approved_path)
+    approved = load_approved(
+        approved_path
+    )
 
-    print(f"Approved corpus rows: {len(approved):,}")
+    print(
+        f"Approved corpus rows: "
+        f"{len(approved):,}"
+    )
 
+    # Clean previous generated mod.
     if mod_root.exists():
-        shutil.rmtree(mod_root)
-
-    if staging_xml.parent.parent.exists():
         shutil.rmtree(
-            staging_xml.parent.parent
+            mod_root
         )
 
+    # Clean previous staging output.
+    build_root = (
+        repo
+        / "build"
+        / args.modid
+    )
+
+    if build_root.exists():
+        shutil.rmtree(
+            build_root
+        )
+
+    # Explicitly recreate root directories.
+    mod_root.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    staging_xml.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    # Build patched localization XML.
     applied = patch_xml(
         base_xml,
         staging_xml,
@@ -474,19 +587,23 @@ def main() -> int:
         args.allow_source_mismatch,
     )
 
+    # Create mod.manifest.
     write_manifest(
-        mod_root / "mod.manifest",
+        mod_root
+        / "mod.manifest",
         args.modid,
         args.name,
         args.version,
         args.author,
     )
 
+    # Pack localization PAK.
     build_localization_pak(
         staging_xml,
         pak_path,
     )
 
+    # Build Vortex-installable outer ZIP.
     build_vortex_zip(
         mod_root,
         dist_zip,
@@ -494,29 +611,47 @@ def main() -> int:
 
     print()
     print("Patch build complete.")
-    print(f"Patched localization keys: {len(applied):,}")
+
+    print(
+        f"Patched localization keys: "
+        f"{len(applied):,}"
+    )
 
     print()
     print("Mod folder:")
-    print(f"  {mod_root}")
+    print(
+        f"  {mod_root}"
+    )
 
     print()
     print("Localization PAK:")
-    print(f"  {pak_path}")
+    print(
+        f"  {pak_path}"
+    )
 
     print()
     print("Vortex ZIP:")
-    print(f"  {dist_zip}")
+    print(
+        f"  {dist_zip}"
+    )
 
     print()
     print("Patched lines:")
 
     for key, rendered in applied:
-        print(f"  {key}")
-        print(f"    {rendered}")
+
+        print(
+            f"  {key}"
+        )
+
+        print(
+            f"    {rendered}"
+        )
 
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(
+        main()
+    )
