@@ -550,25 +550,13 @@ def main() -> int:
         f"{len(approved):,}"
     )
 
-    # Clean previous generated mod.
-    if mod_root.exists():
-        shutil.rmtree(
-            mod_root
-        )
+    # Do not recursively delete build/mod folders.
+    # Windows, OneDrive, Explorer, antivirus, or an editor may temporarily
+    # hold directory handles open and cause WinError 5 / Access Denied.
+    #
+    # All generated files below are overwritten individually, so deleting
+    # the entire directory tree is unnecessary.
 
-    # Clean previous staging output.
-    build_root = (
-        repo
-        / "build"
-        / args.modid
-    )
-
-    if build_root.exists():
-        shutil.rmtree(
-            build_root
-        )
-
-    # Explicitly recreate root directories.
     mod_root.mkdir(
         parents=True,
         exist_ok=True,
