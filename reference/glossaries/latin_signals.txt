@@ -1,45 +1,6 @@
 # FTFL Latin detection signals
-# Seed list only; expand from verified corpus hits.
-
-amen
-ave
-domine
-dominus
-deus
-dei
-deo
-christus
-christe
-sanctus
-sancta
-sancte
-pater
-filius
-spiritus
-mortem
-mors
-vita
-requiem
-requiescat
-pace
-in pace
-ora
-pro
-nobis
-miserere
-peccata
-peccatum
-ecce
-benedictus
-gloria
-mea culpa
-mea
-culpa
-et
-non
-est
-sum
-sunt
+# Conservative seed list.
+# Prefer distinctive phrases and strongly Latin forms over common short words.
 
 ave maria
 domine
