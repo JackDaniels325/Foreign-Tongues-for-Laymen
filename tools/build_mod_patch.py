@@ -21,8 +21,8 @@ from __future__ import annotations
 import argparse
 import csv
 import re
-import shutil
 import sys
+import unicodedata
 import zipfile
 import xml.etree.ElementTree as ET
 from datetime import date
@@ -31,6 +31,24 @@ from xml.sax.saxutils import escape
 
 
 MODID_RE = re.compile(r"^[a-z_]+$")
+
+
+def normalize_source_text(text: str) -> str:
+    """
+    Normalize localization text only for source comparison.
+
+    This does not alter the subtitle text written to the mod. It prevents
+    harmless Unicode normalization and whitespace differences from triggering
+    source-mismatch failures.
+    """
+    normalized = unicodedata.normalize(
+        "NFKC",
+        text or "",
+    )
+
+    return " ".join(
+        normalized.split()
+    )
 
 MIXED_TYPES = {
     "mixed",
@@ -245,7 +263,8 @@ def patch_xml(
 
         if (
             expected
-            and base_display != expected
+            and normalize_source_text(base_display)
+            != normalize_source_text(expected)
             and not allow_source_mismatch
         ):
             raise SystemExit(
