@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FTFL - Build Translation Review Queue
+FTFL - Build Translation Review Queue (conservative v2)
 
 Reads:
     reference/aligned/code_switch_candidates.csv
@@ -8,118 +8,78 @@ Reads:
 Writes:
     reference/aligned/translation_need_review.csv
 
-Purpose:
-    Turn the global detector output into a smaller, structured review queue.
-    This tool does NOT auto-approve or auto-translate anything.
+Important:
+    English_reference is treated as an alternate/source-side reference string,
+    NOT automatically as an English translation.
+
+    This tool does NOT auto-approve translations and does NOT auto-declare a
+    subtitle "self-glossed". Those decisions require actual semantic review.
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
-import re
 import sys
-from difflib import SequenceMatcher
+from collections import Counter
 from pathlib import Path
 
 
-WORD_RE = re.compile(
-    r"[A-Za-zÀ-ÖØ-öø-ÿĀ-ž]+(?:['’-][A-Za-zÀ-ÖØ-öø-ÿĀ-ž]+)?"
-)
-WS_RE = re.compile(r"\s+")
-
-
 def clean(text: str) -> str:
-    return WS_RE.sub(" ", (text or "").strip())
+    return " ".join((text or "").split())
 
 
-def words(text: str) -> list[str]:
-    return [m.group(0).casefold() for m in WORD_RE.finditer(text or "")]
-
-
-def similarity(a: str, b: str) -> float:
-    a = clean(a).casefold()
-    b = clean(b).casefold()
-
-    if not a or not b:
-        return 0.0
-
-    return SequenceMatcher(None, a, b).ratio()
-
-
-def word_overlap_ratio(a: str, b: str) -> float:
-    a_words = set(words(a))
-    b_words = set(words(b))
-
-    if not a_words or not b_words:
-        return 0.0
-
-    overlap = len(a_words & b_words)
-    return overlap / max(1, len(a_words | b_words))
+def safe_int(value: str) -> int:
+    try:
+        return int(value or 0)
+    except ValueError:
+        return 0
 
 
 def choose_bucket(row: dict[str, str]) -> tuple[str, str, list[str]]:
     classification = clean(row.get("classification", ""))
     language_status = clean(row.get("language_status", "single"))
-    display = clean(row.get("English_display", ""))
-    reference = clean(row.get("English_reference", ""))
     suppressed = clean(row.get("suppressed_name_signals", ""))
-
-    try:
-        score = int(row.get("foreign_score", "0") or 0)
-    except ValueError:
-        score = 0
-
-    ref_differs = bool(reference and reference != display)
-    sim = similarity(display, reference)
-    overlap = word_overlap_ratio(display, reference)
+    reference = clean(row.get("English_reference", ""))
+    display = clean(row.get("English_display", ""))
+    score = safe_int(row.get("foreign_score", "0"))
 
     notes: list[str] = []
 
     if language_status != "single":
-        notes.append("multiple/ambiguous language-family evidence")
-        return "language_review", "high", notes
+        notes.append("multiple or ambiguous language-family evidence")
+        return "language_review", "highest", notes
 
     if suppressed:
         notes.append("proper-name/title suppression evidence present")
         return "name_title_review", "high", notes
 
-    # A differing English reference is valuable evidence because it may contain
-    # an official English rendering of the foreign material.
-    if ref_differs:
-        notes.append("English reference differs from displayed subtitle")
-
-        # If the display already shares a large amount of English wording with
-        # the reference, the foreign material may already be paraphrased or
-        # explained in the same subtitle. Flag for review; do not auto-skip.
-        if overlap >= 0.55 or sim >= 0.72:
-            notes.append(
-                f"high display/reference overlap "
-                f"(word={overlap:.2f}, sequence={sim:.2f})"
-            )
-            return "possible_self_glossed", "high", notes
-
-        if classification == "likely_full_foreign":
-            return "reference_translation_candidate", "highest", notes
-
-        if classification == "mixed_language":
-            return "reference_translation_candidate", "highest", notes
-
-        return "reference_translation_candidate", "high", notes
+    if reference and reference != display:
+        notes.append(
+            "English_reference differs from English_display; "
+            "treat as variant/reference evidence, not as a translation"
+        )
 
     if classification == "likely_full_foreign":
-        notes.append("full-foreign candidate without differing English reference")
-        return "manual_translation_needed", "highest", notes
+        notes.append("display is likely fully foreign")
+        return "full_foreign_translation", "highest", notes
 
     if classification == "mixed_language":
-        notes.append("mixed-language candidate without differing English reference")
-        return "manual_translation_needed", "high", notes
+        notes.append(
+            "mixed English/foreign display; determine exact foreign span "
+            "and whether the line already paraphrases it"
+        )
+        return "mixed_language_review", "high", notes
 
-    if score >= 4:
-        notes.append("strong foreign-fragment score")
-        return "manual_translation_needed", "medium", notes
+    if classification == "foreign_fragment":
+        if score >= 4:
+            notes.append("strong foreign-fragment evidence")
+            return "foreign_fragment_review", "medium", notes
 
-    notes.append("low-confidence fragment; manual review first")
+        notes.append("lower-confidence foreign fragment")
+        return "general_review", "low", notes
+
+    notes.append("unrecognized detector classification")
     return "general_review", "low", notes
 
 
@@ -134,7 +94,7 @@ def priority_rank(priority: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Build the FTFL translation/review queue."
+        description="Build conservative FTFL translation review queue."
     )
     parser.add_argument(
         "--input",
@@ -184,18 +144,23 @@ def main() -> int:
             )
             return 4
 
+        source_fields = list(reader.fieldnames)
+
         for row in reader:
             bucket, priority, notes = choose_bucket(row)
-
-            reference = clean(row.get("English_reference", ""))
-            display = clean(row.get("English_display", ""))
 
             out = dict(row)
             out["review_bucket"] = bucket
             out["priority"] = priority
-            out["reference_differs"] = "yes" if reference != display else "no"
-            out["display_reference_similarity"] = f"{similarity(display, reference):.3f}"
-            out["display_reference_word_overlap"] = f"{word_overlap_ratio(display, reference):.3f}"
+            out["reference_differs"] = (
+                "yes"
+                if clean(row.get("English_reference", ""))
+                != clean(row.get("English_display", ""))
+                else "no"
+            )
+            out["review_decision"] = ""
+            out["verified_foreign_span"] = ""
+            out["verified_meaning"] = ""
             out["review_notes"] = " | ".join(notes)
 
             rows.append(out)
@@ -204,51 +169,62 @@ def main() -> int:
         key=lambda row: (
             priority_rank(row.get("priority", "")),
             row.get("review_bucket", ""),
-            -int(row.get("foreign_score", "0") or 0),
+            -safe_int(row.get("foreign_score", "0")),
             row.get("localization_key", ""),
         )
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    base_fields = list(rows[0].keys()) if rows else []
-    preferred_tail = [
+    added_fields = [
         "review_bucket",
         "priority",
         "reference_differs",
-        "display_reference_similarity",
-        "display_reference_word_overlap",
+        "review_decision",
+        "verified_foreign_span",
+        "verified_meaning",
         "review_notes",
     ]
 
     fieldnames = [
-        field
-        for field in base_fields
-        if field not in preferred_tail
-    ] + preferred_tail
+        field for field in source_fields if field not in added_fields
+    ] + added_fields
 
     with output_path.open("w", encoding="utf-8-sig", newline="") as dst:
         writer = csv.DictWriter(dst, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
-    bucket_counts: dict[str, int] = {}
-    for row in rows:
-        bucket = row["review_bucket"]
-        bucket_counts[bucket] = bucket_counts.get(bucket, 0) + 1
+    bucket_counts = Counter(
+        row["review_bucket"]
+        for row in rows
+    )
 
-    print("Translation review queue complete.")
+    priority_counts = Counter(
+        row["priority"]
+        for row in rows
+    )
+
+    print("Conservative translation review queue complete.")
     print(f"Rows written: {len(rows):,}")
     print()
+
     print("Review buckets:")
-    for bucket, count in sorted(
-        bucket_counts.items(),
-        key=lambda item: (-item[1], item[0]),
-    ):
-        print(f"  {bucket:<34} {count:>7,}")
+    for bucket, count in bucket_counts.most_common():
+        print(f"  {bucket:<30} {count:>7,}")
 
     print()
+    print("Priorities:")
+    for priority in ("highest", "high", "medium", "low"):
+        count = priority_counts.get(priority, 0)
+        print(f"  {priority:<10} {count:>7,}")
+
+    print()
+    print(
+        "NOTE: No rows were automatically marked self-glossed or translated."
+    )
     print(f"Output: {output_path}")
+
     return 0
 
 
