@@ -1,10 +1,11 @@
 # FTFL German detection signals
 # One token or phrase per line. Case-insensitive.
-# Multi-word entries are encouraged because they provide stronger evidence.
+# Prefer distinctive German forms and reusable phrases.
+# English homographs such as "was", "man", "also", "die", and title-only
+# "von" are deliberately excluded as standalone signals.
 
 aber
 ach
-also
 auf
 auch
 das
@@ -12,7 +13,6 @@ dein
 deine
 deiner
 dich
-die
 dir
 doch
 ein
@@ -34,12 +34,10 @@ ja
 junger
 klar
 kommt
-lassen wir das
 mein
 meine
 meiner
 mann
-man
 mich
 nicht
 nichts
@@ -50,16 +48,23 @@ scheiße
 scheißkerle
 schurken
 schön
-schönen tag
 seele
 sünde
 und
 verdammte
 verdammt
 verstehe
-von
 warum
-was
 wenn
 wohl
+weiter
+
+aber das ist deine sache
+ach lassen wir das
+das kommt darauf an
+ja das kann man wohl sagen
+lassen wir das
+nichts weiter
+schönen tag
+wenn du was brauchst
 zum glück
