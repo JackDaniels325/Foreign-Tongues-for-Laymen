@@ -11,7 +11,7 @@ Outputs:
         mod.manifest
         Localization/English_xml.pak
 
-    dist/Foreign-Tongues-for-Laymen-v0.2-playtest.zip
+    dist/Foreign-Tongues-for-Laymen-0.2-playtest.zip
 
 The outer ZIP is ready to drag into Vortex.
 """
@@ -223,6 +223,23 @@ def patch_xml(
     approved: dict[str, dict[str, str]],
     allow_source_mismatch: bool,
 ) -> list[tuple[str, str]]:
+    """
+    Patch approved localization keys and propagate FULL-FOREIGN approvals across
+    exact normalized display-text families.
+
+    Why:
+        KCD2 often stores the same visible subtitle under multiple localization
+        keys. Approving only one key leaves sibling keys untouched, which causes
+        apparently "random" untranslated repeats in-game.
+
+    Rules:
+        - Mixed-language approvals remain key-specific.
+        - Full-foreign approvals may propagate to every row whose current
+          English_display exactly matches the approved original after NFKC +
+          whitespace normalization.
+        - Conflicting approvals for the same display family abort the build.
+        - Original source text is preserved in the rendered subtitle.
+    """
 
     if not base_xml.exists():
         raise SystemExit(
@@ -235,11 +252,11 @@ def patch_xml(
     tree = ET.parse(base_xml)
     root = tree.getroot()
 
-    found: set[str] = set()
-    applied: list[tuple[str, str]] = []
+    # Index every usable localization row once.
+    rows_by_key: dict[str, tuple[ET.Element, list[ET.Element], str]] = {}
+    keys_by_display: dict[str, list[str]] = {}
 
     for row in root.iter():
-
         if row.tag.rsplit("}", 1)[-1] != "Row":
             continue
 
@@ -250,12 +267,44 @@ def patch_xml(
 
         key = visible_text(cells[0])
 
-        if key not in approved:
+        if not key:
             continue
 
-        entry = approved[key]
-
         base_display = visible_text(cells[2])
+
+        rows_by_key[key] = (
+            row,
+            cells,
+            base_display,
+        )
+
+        family = normalize_source_text(
+            base_display
+        )
+
+        if family:
+            keys_by_display.setdefault(
+                family,
+                [],
+            ).append(key)
+
+    missing = sorted(
+        set(approved) - set(rows_by_key)
+    )
+
+    if missing:
+        raise SystemExit(
+            "Approved localization keys were not found "
+            "in English text_ui_dialog.xml:\n"
+            + "\n".join(missing)
+        )
+
+    # Validate approved source text first and build family propagation map.
+    full_family_entries: dict[str, dict[str, str]] = {}
+    approved_key_entries: dict[str, dict[str, str]] = {}
+
+    for key, entry in approved.items():
+        _, _, base_display = rows_by_key[key]
 
         expected = entry[
             "original_display_text"
@@ -277,29 +326,98 @@ def patch_xml(
                 "for deliberate testing."
             )
 
-        original = expected or base_display
+        approved_key_entries[key] = entry
 
-        meaning = entry[
-            "verified_meaning"
+        line_type = entry[
+            "line_type"
+        ].lower()
+
+        if line_type not in FULL_TYPES:
+            continue
+
+        original = expected or base_display
+        family = normalize_source_text(
+            original
+        )
+
+        if not family:
+            continue
+
+        existing = full_family_entries.get(
+            family
+        )
+
+        if existing is None:
+            full_family_entries[family] = entry
+            continue
+
+        # If two approved keys share the same visible text, they must agree.
+        conflicts: list[str] = []
+
+        for field in (
+            "verified_meaning",
+            "source_language",
+            "line_type",
+        ):
+            if (
+                existing.get(field, "").strip().casefold()
+                != entry.get(field, "").strip().casefold()
+            ):
+                conflicts.append(field)
+
+        if conflicts:
+            raise SystemExit(
+                "\nConflicting full-foreign approvals detected "
+                "for the same display family.\n"
+                f"Display: {original}\n"
+                f"Fields:  {', '.join(conflicts)}\n"
+                "Resolve the approved.csv entries before building."
+            )
+
+    applied: list[tuple[str, str]] = []
+    applied_keys: set[str] = set()
+    propagated_keys: list[str] = []
+
+    def apply_entry_to_key(
+        target_key: str,
+        entry: dict[str, str],
+        propagated: bool,
+    ) -> None:
+        if target_key in applied_keys:
+            return
+
+        _, cells, base_display = rows_by_key[
+            target_key
         ]
 
         line_type = entry[
             "line_type"
         ].lower()
 
+        expected = entry[
+            "original_display_text"
+        ]
+
+        # For propagated siblings, preserve the sibling's actual source text.
+        original = (
+            base_display
+            if propagated
+            else (expected or base_display)
+        )
+
+        meaning = entry[
+            "verified_meaning"
+        ]
+
         try:
-
             if line_type in MIXED_TYPES:
-
                 rendered = apply_mixed(
                     cells[2],
                     original,
                     entry["foreign_fragment"],
                     meaning,
                 )
-
             else:
-
                 rendered = apply_full_foreign(
                     cells[2],
                     original,
@@ -308,28 +426,47 @@ def patch_xml(
 
         except ValueError as exc:
             raise SystemExit(
-                f"{key}: {exc}"
+                f"{target_key}: {exc}"
             )
 
-        found.add(key)
+        applied_keys.add(
+            target_key
+        )
 
         applied.append(
             (
-                key,
+                target_key,
                 rendered,
             )
         )
 
-    missing = sorted(
-        set(approved) - found
-    )
+        if propagated:
+            propagated_keys.append(
+                target_key
+            )
 
-    if missing:
-        raise SystemExit(
-            "Approved localization keys were not found "
-            "in English text_ui_dialog.xml:\n"
-            + "\n".join(missing)
+    # 1) Apply every explicitly approved key.
+    for key, entry in approved_key_entries.items():
+        apply_entry_to_key(
+            key,
+            entry,
+            propagated=False,
         )
+
+    # 2) Propagate FULL-FOREIGN approvals to every exact display-text sibling.
+    for family, entry in full_family_entries.items():
+        for sibling_key in keys_by_display.get(
+            family,
+            [],
+        ):
+            if sibling_key in applied_keys:
+                continue
+
+            apply_entry_to_key(
+                sibling_key,
+                entry,
+                propagated=True,
+            )
 
     output_xml.parent.mkdir(
         parents=True,
@@ -341,6 +478,25 @@ def patch_xml(
         encoding="utf-8",
         xml_declaration=True,
         short_empty_elements=True,
+    )
+
+    print()
+    print("Family propagation summary:")
+    print(
+        f"  Explicit approved keys: "
+        f"{len(approved_key_entries):,}"
+    )
+    print(
+        f"  Full-text families:      "
+        f"{len(full_family_entries):,}"
+    )
+    print(
+        f"  Propagated sibling keys: "
+        f"{len(propagated_keys):,}"
+    )
+    print(
+        f"  Total patched keys:      "
+        f"{len(applied):,}"
     )
 
     return applied
@@ -418,6 +574,23 @@ def build_vortex_zip(
     if zip_path.exists():
         zip_path.unlink()
 
+    files = [
+        mod_root / "mod.manifest",
+        mod_root / "Localization" / "English_xml.pak",
+    ]
+
+    missing = [
+        str(file)
+        for file in files
+        if not file.is_file()
+    ]
+
+    if missing:
+        raise SystemExit(
+            "Cannot build Vortex ZIP; expected files are missing:\n"
+            + "\n".join(missing)
+        )
+
     with zipfile.ZipFile(
         zip_path,
         "w",
@@ -425,13 +598,7 @@ def build_vortex_zip(
         compresslevel=6,
     ) as archive:
 
-        for file in sorted(
-            mod_root.rglob("*")
-        ):
-
-            if not file.is_file():
-                continue
-
+        for file in files:
             relative = file.relative_to(
                 mod_root.parent
             )
