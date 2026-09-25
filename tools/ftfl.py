@@ -45,6 +45,7 @@ REGRESSION_STATUS = STATUS_DIR / "regression_review.csv"
 DISCOVERY_SUMMARY = STATUS_DIR / "discovery_summary.csv"
 CANDIDATE_SAMPLE = STATUS_DIR / "candidate_sample.csv"
 TRANSLATION_WORKLIST = STATUS_DIR / "translation_worklist.csv"
+TRANSLATION_CONTEXT = STATUS_DIR / "translation_context.csv"
 
 APPROVED = REPO / "corpus" / "approved.csv"
 PROPER_NOUNS = REPO / "reference" / "glossaries" / "proper_nouns.txt"
@@ -316,6 +317,85 @@ def build_translation_worklist(rows_out: list[dict[str, str]]) -> list[dict[str,
         )
     )
     return work
+
+
+def export_translation_context(
+    worklist_rows: list[dict[str, str]],
+) -> int:
+    """
+    Export only the aligned localization rows needed for the current
+    translation worklist. This keeps GitHub review compact while exposing the
+    official multilingual Rosetta context needed to verify meanings.
+    """
+    wanted_keys = {
+        (row.get("representative_key") or "").strip()
+        for row in worklist_rows
+        if (row.get("representative_key") or "").strip()
+    }
+
+    if not wanted_keys:
+        with TRANSLATION_CONTEXT.open(
+            "w",
+            encoding="utf-8-sig",
+            newline="",
+        ) as handle:
+            handle.write("localization_key\n")
+        return 0
+
+    with ALIGNMENT.open(
+        "r",
+        encoding="utf-8-sig",
+        newline="",
+    ) as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames:
+            raise SystemExit("localization_alignment.csv has no header")
+
+        # Keep exact key plus all official display columns and English
+        # reference. That is enough Rosetta context for meaning verification
+        # without publishing the full 300 MB alignment.
+        keep_fields = ["localization_key"]
+
+        if "English_reference" in reader.fieldnames:
+            keep_fields.append("English_reference")
+
+        keep_fields.extend(
+            field
+            for field in reader.fieldnames
+            if field.endswith("_display")
+        )
+
+        rows = []
+        for row in reader:
+            key = (row.get("localization_key") or "").strip()
+            if key not in wanted_keys:
+                continue
+
+            rows.append({
+                field: row.get(field, "")
+                for field in keep_fields
+            })
+
+    rows.sort(
+        key=lambda row: (
+            (row.get("English_display") or "").casefold(),
+            row.get("localization_key") or "",
+        )
+    )
+
+    with TRANSLATION_CONTEXT.open(
+        "w",
+        encoding="utf-8-sig",
+        newline="",
+    ) as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=keep_fields,
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return len(rows)
 
 
 def source_discovery() -> tuple[int, dict[str, str]]:
@@ -846,6 +926,8 @@ def source_discovery() -> tuple[int, dict[str, str]]:
         writer.writeheader()
         writer.writerows(worklist_rows)
 
+    context_rows = export_translation_context(worklist_rows)
+
     candidate_displays = {
         normalize(row["English_display"])
         for row in rows_out
@@ -962,6 +1044,10 @@ def source_discovery() -> tuple[int, dict[str, str]]:
             "translation_worklist_families",
             len(worklist_rows),
         ])
+        writer.writerow([
+            "translation_context_rows",
+            context_rows,
+        ])
 
         for reason, count in sorted(
             reason_counts.items()
@@ -1005,6 +1091,11 @@ def source_discovery() -> tuple[int, dict[str, str]]:
         f"Translation worklist: "
         f"{TRANSLATION_WORKLIST.relative_to(REPO)} "
         f"({len(worklist_rows):,} families)"
+    )
+    print(
+        f"Translation context: "
+        f"{TRANSLATION_CONTEXT.relative_to(REPO)} "
+        f"({context_rows:,} rows)"
     )
 
     print()

@@ -3,6 +3,7 @@ candidate_rows,6467
 regression_phrases,8
 regression_failures,0
 translation_worklist_families,4609
+translation_context_rows,4609
 reason:dense_mixed_two_token_preservation,33
 reason:dense_reference_difference_plus_very_strong_preservation,514
 reason:dense_three_strong_preserved_tokens,80
