@@ -43,6 +43,7 @@ UNRESOLVED = REPO / "reference" / "aligned" / "unresolved_families.csv"
 STATUS_DIR = REPO / "reference" / "status"
 REGRESSION_STATUS = STATUS_DIR / "regression_review.csv"
 DISCOVERY_SUMMARY = STATUS_DIR / "discovery_summary.csv"
+CANDIDATE_SAMPLE = STATUS_DIR / "candidate_sample.csv"
 
 APPROVED = REPO / "corpus" / "approved.csv"
 PROPER_NOUNS = REPO / "reference" / "glossaries" / "proper_nouns.txt"
@@ -611,6 +612,69 @@ def source_discovery() -> tuple[int, dict[str, str]]:
         writer.writeheader()
         writer.writerows(rows_out)
 
+    # Compact deterministic audit sample for GitHub review.
+    # No randomization: repeated scans produce the same sample for the same
+    # candidate set, making it easy to compare filter revisions.
+    sample_rows: list[dict[str, str]] = []
+    sample_size = min(50, len(rows_out))
+
+    if rows_out:
+        top = rows_out[:sample_size]
+        bottom = rows_out[-sample_size:] if len(rows_out) > sample_size else []
+
+        middle: list[dict[str, str]] = []
+        if len(rows_out) > sample_size * 2:
+            mid_start = max(0, (len(rows_out) // 2) - (sample_size // 2))
+            middle = rows_out[mid_start:mid_start + sample_size]
+
+        seen_keys: set[str] = set()
+
+        def add_sample(bucket: str, rows: list[dict[str, str]]) -> None:
+            for row in rows:
+                key = row["localization_key"]
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                sample_rows.append({
+                    "sample_bucket": bucket,
+                    "localization_key": key,
+                    "source_score": row.get("source_score", ""),
+                    "discovery_reasons": row.get("discovery_reasons", ""),
+                    "signal_languages": row.get("signal_languages", ""),
+                    "strong_preserved_tokens": row.get("strong_preserved_tokens", ""),
+                    "very_strong_content_ratio": row.get("very_strong_content_ratio", ""),
+                    "strong_content_ratio": row.get("strong_content_ratio", ""),
+                    "English_display": row.get("English_display", ""),
+                    "English_reference": row.get("English_reference", ""),
+                })
+
+        add_sample("TOP", top)
+        add_sample("MIDDLE", middle)
+        add_sample("BOTTOM", bottom)
+
+    STATUS_DIR.mkdir(parents=True, exist_ok=True)
+
+    with CANDIDATE_SAMPLE.open(
+        "w",
+        encoding="utf-8-sig",
+        newline="",
+    ) as handle:
+        sample_fields = [
+            "sample_bucket",
+            "localization_key",
+            "source_score",
+            "discovery_reasons",
+            "signal_languages",
+            "strong_preserved_tokens",
+            "very_strong_content_ratio",
+            "strong_content_ratio",
+            "English_display",
+            "English_reference",
+        ]
+        writer = csv.DictWriter(handle, fieldnames=sample_fields)
+        writer.writeheader()
+        writer.writerows(sample_rows)
+
     candidate_displays = {
         normalize(row["English_display"])
         for row in rows_out
@@ -734,7 +798,7 @@ def source_discovery() -> tuple[int, dict[str, str]]:
 
     print()
     print("=" * 72)
-    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 7")
+    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 7 + AUDIT SAMPLE")
     print("=" * 72)
     print(f"Candidates: {len(rows_out):,}")
     print(
@@ -748,6 +812,11 @@ def source_discovery() -> tuple[int, dict[str, str]]:
     print(
         f"Summary: "
         f"{DISCOVERY_SUMMARY.relative_to(REPO)}"
+    )
+    print(
+        f"Audit sample: "
+        f"{CANDIDATE_SAMPLE.relative_to(REPO)} "
+        f"({len(sample_rows):,} rows)"
     )
 
     print()
