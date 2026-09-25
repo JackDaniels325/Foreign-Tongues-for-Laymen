@@ -44,6 +44,7 @@ STATUS_DIR = REPO / "reference" / "status"
 REGRESSION_STATUS = STATUS_DIR / "regression_review.csv"
 DISCOVERY_SUMMARY = STATUS_DIR / "discovery_summary.csv"
 CANDIDATE_SAMPLE = STATUS_DIR / "candidate_sample.csv"
+TRANSLATION_WORKLIST = STATUS_DIR / "translation_worklist.csv"
 
 APPROVED = REPO / "corpus" / "approved.csv"
 PROPER_NOUNS = REPO / "reference" / "glossaries" / "proper_nouns.txt"
@@ -216,6 +217,105 @@ def signal_evidence(
                 break
 
     return sorted(set(hits))
+
+
+def looks_english_only(display: str, signal_hits: list[str]) -> bool:
+    """
+    Conservative English-only guard for the translation worklist.
+
+    This does NOT remove rows from source discovery. It only keeps obvious
+    English-only lines out of the high-confidence translation queue.
+    """
+    if signal_hits:
+        return False
+
+    norm = normalize(display)
+    words = [normalize_token(t) for t in tokens(display)]
+    if not words:
+        return True
+
+    english_markers = {
+        "the", "and", "you", "your", "this", "that", "with", "from", "what",
+        "who", "where", "when", "why", "how", "was", "were", "are", "is",
+        "have", "has", "had", "will", "would", "could", "should", "not", "for",
+        "to", "of", "in", "on", "at", "it", "he", "she", "they", "we", "i",
+        "me", "my", "our", "their", "them", "his", "her", "just", "like",
+        "don't", "didn't", "can't", "won't", "it's", "i'll", "you'll",
+    }
+
+    marker_count = sum(1 for w in words if w in english_markers)
+    ascii_only = all(ord(ch) < 128 for ch in display)
+
+    # Long ASCII lines containing several common English function words are
+    # overwhelmingly ordinary English dialogue in the current audit sample.
+    return ascii_only and len(words) >= 5 and marker_count >= 2
+
+
+def build_translation_worklist(rows_out: list[dict[str, str]]) -> list[dict[str, str]]:
+    """
+    Build a compact, high-confidence family-first queue from discovery output.
+    This is where translation work begins; it is not another detector pass.
+    """
+    grouped: dict[str, list[dict[str, str]]] = defaultdict(list)
+
+    for row in rows_out:
+        grouped[normalize(row["English_display"])].append(row)
+
+    work: list[dict[str, str]] = []
+
+    for family, members in grouped.items():
+        members.sort(key=lambda r: r["localization_key"])
+        rep = members[0]
+
+        signal_hits = [
+            x.strip()
+            for x in (rep.get("signal_languages") or "").split(";")
+            if x.strip()
+        ]
+        reasons = rep.get("discovery_reasons") or ""
+        display = rep.get("English_display") or ""
+
+        if looks_english_only(display, signal_hits):
+            continue
+
+        very_ratio = float(rep.get("very_strong_content_ratio") or 0)
+        strong_ratio = float(rep.get("strong_content_ratio") or 0)
+        score = int(rep.get("source_score") or 0)
+
+        high_confidence = (
+            bool(signal_hits)
+            or very_ratio >= 0.75
+            or strong_ratio >= 0.80
+            or "dense_mixed_two_token_preservation" in reasons
+        )
+
+        if not high_confidence:
+            continue
+
+        work.append({
+            "representative_key": rep["localization_key"],
+            "family_size": str(len(members)),
+            "source_score": str(score),
+            "signal_languages": "; ".join(signal_hits),
+            "strong_preserved_tokens": rep.get("strong_preserved_tokens", ""),
+            "very_strong_content_ratio": rep.get("very_strong_content_ratio", ""),
+            "strong_content_ratio": rep.get("strong_content_ratio", ""),
+            "English_display": display,
+            "English_reference": rep.get("English_reference", ""),
+            "translation_status": "NEEDS_TRANSLATION",
+            "source_language": "",
+            "verified_meaning": "",
+            "notes": "",
+        })
+
+    work.sort(
+        key=lambda r: (
+            -int(r["family_size"]),
+            -int(r["source_score"]),
+            r["English_display"].casefold(),
+        )
+    )
+    return work
 
 
 def source_discovery() -> tuple[int, dict[str, str]]:
@@ -720,6 +820,32 @@ def source_discovery() -> tuple[int, dict[str, str]]:
         writer.writeheader()
         writer.writerows(sample_rows)
 
+    worklist_rows = build_translation_worklist(rows_out)
+
+    with TRANSLATION_WORKLIST.open(
+        "w",
+        encoding="utf-8-sig",
+        newline="",
+    ) as handle:
+        worklist_fields = [
+            "representative_key",
+            "family_size",
+            "source_score",
+            "signal_languages",
+            "strong_preserved_tokens",
+            "very_strong_content_ratio",
+            "strong_content_ratio",
+            "English_display",
+            "English_reference",
+            "translation_status",
+            "source_language",
+            "verified_meaning",
+            "notes",
+        ]
+        writer = csv.DictWriter(handle, fieldnames=worklist_fields)
+        writer.writeheader()
+        writer.writerows(worklist_rows)
+
     candidate_displays = {
         normalize(row["English_display"])
         for row in rows_out
@@ -832,6 +958,10 @@ def source_discovery() -> tuple[int, dict[str, str]]:
             "regression_failures",
             len(failures),
         ])
+        writer.writerow([
+            "translation_worklist_families",
+            len(worklist_rows),
+        ])
 
         for reason, count in sorted(
             reason_counts.items()
@@ -851,7 +981,7 @@ def source_discovery() -> tuple[int, dict[str, str]]:
 
     print()
     print("=" * 72)
-    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 8 (AUTHORED-DIALOGUE CLEANUP)")
+    print("FTFL SOURCE DISCOVERY + TRANSLATION WORKLIST")
     print("=" * 72)
     print(f"Candidates: {len(rows_out):,}")
     print(
@@ -870,6 +1000,11 @@ def source_discovery() -> tuple[int, dict[str, str]]:
         f"Audit sample: "
         f"{CANDIDATE_SAMPLE.relative_to(REPO)} "
         f"({len(sample_rows):,} rows)"
+    )
+    print(
+        f"Translation worklist: "
+        f"{TRANSLATION_WORKLIST.relative_to(REPO)} "
+        f"({len(worklist_rows):,} families)"
     )
 
     print()
