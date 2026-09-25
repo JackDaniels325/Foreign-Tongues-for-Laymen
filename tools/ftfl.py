@@ -384,26 +384,31 @@ def source_discovery() -> tuple[int, dict[str, str]]:
             admitted = False
             reasons: list[str] = []
 
-            # Primary source-driven route. Two preserved tokens are useful,
-            # but pass 3 still admitted too many ordinary names/shared words.
-            # Tighten this route by requiring at least one token to be VERY
-            # strongly preserved, or independent corroboration from signals
-            # or an English-reference difference.
+            # Pass 5: the generic two-token route was still the main source
+            # of noise. Two tokens now qualify only when BOTH are very strongly
+            # preserved, or when the pair is independently supported by a
+            # language signal. English reference/display differences no longer
+            # act as a free pass for ordinary two-token phrases.
             if (
-                len(strong_meaningful) >= 2
-                and (
-                    very_strong_meaningful
-                    or signal_hits
-                    or direct_reference_diff
-                )
+                len(very_strong_meaningful) >= 2
             ):
                 admitted = True
                 reasons.append(
-                    "corroborated_two_token_preservation"
+                    "two_very_strong_preserved_tokens"
                 )
 
-            # Three or more strong distinctive tokens are convincing enough on
-            # source evidence alone, even without secondary corroboration.
+            elif (
+                len(strong_meaningful) >= 2
+                and signal_hits
+            ):
+                admitted = True
+                reasons.append(
+                    "signal_supported_two_token_preservation"
+                )
+
+            # Longer foreign phrases may not preserve every token at the
+            # highest ratio, so three strong distinctive tokens still qualify
+            # on source evidence alone.
             elif len(strong_meaningful) >= 3:
                 admitted = True
                 reasons.append(
@@ -421,8 +426,9 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                     "signal_support_plus_strong_preservation"
                 )
 
-            # English reference/display differences are useful, but they only
-            # qualify a single-token case when preservation is very strong.
+            # English reference/display differences are still useful for
+            # single-token code-switches, but only when that token is very
+            # strongly preserved across official localizations.
             elif (
                 direct_reference_diff
                 and very_strong_meaningful
@@ -674,7 +680,7 @@ def source_discovery() -> tuple[int, dict[str, str]]:
 
     print()
     print("=" * 72)
-    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 4")
+    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 5")
     print("=" * 72)
     print(f"Candidates: {len(rows_out):,}")
     print(
