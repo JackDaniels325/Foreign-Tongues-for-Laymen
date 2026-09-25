@@ -52,7 +52,7 @@ TOKEN_RE = re.compile(r"[^\W\d_]+(?:['’\-][^\W\d_]+)*", re.UNICODE)
 
 COMMON_ENGLISH = {
     "a", "an", "and", "are", "as", "at", "be", "been", "but", "by",
-    "can", "come", "did", "do", "does", "for", "from", "get", "go", "good",
+    "best", "can", "come", "did", "do", "does", "for", "from", "get", "go", "good",
     "had", "has", "have", "he", "hello", "her", "here", "him", "his", "how",
     "i", "if", "in", "is", "it", "its", "me", "my", "no", "not", "of", "oh",
     "on", "or", "our", "out", "please", "she", "so", "some", "that", "the",
@@ -401,14 +401,18 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                 if content_tokens
                 else 0.0
             )
+            strong_ratio = (
+                len(set(strong_meaningful)) / len(content_tokens)
+                if content_tokens
+                else 0.0
+            )
 
             admitted = False
             reasons: list[str] = []
 
-            # Pass 6: two very-strong tokens are no longer enough by
-            # themselves. They must make up at least half of the meaningful
-            # subtitle content. This keeps compact foreign phrases while
-            # dropping long ordinary-English lines with incidental overlap.
+            # Pass 7: compact foreign phrases still qualify when two tokens
+            # are very strongly preserved and make up at least half of the
+            # meaningful subtitle content.
             if (
                 len(very_strong_meaningful) >= 2
                 and very_strong_ratio >= 0.50
@@ -416,6 +420,22 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                 admitted = True
                 reasons.append(
                     "dense_two_very_strong_preserved_tokens"
+                )
+
+            # Mixed-language lines can legitimately contain a short foreign
+            # phrase followed by ordinary English. Preserve that case when two
+            # distinctive tokens are strongly preserved, at least one is very
+            # strongly preserved, and the strong tokens dominate the
+            # meaningful non-common-word content. This is generic and does not
+            # hardcode any regression phrase.
+            elif (
+                len(strong_meaningful) >= 2
+                and len(very_strong_meaningful) >= 1
+                and strong_ratio >= 0.67
+            ):
+                admitted = True
+                reasons.append(
+                    "dense_mixed_two_token_preservation"
                 )
 
             # A language signal can still corroborate a two-token mixed line
@@ -529,6 +549,7 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                     very_strong_threshold
                 ),
                 "very_strong_content_ratio": f"{very_strong_ratio:.3f}",
+                "strong_content_ratio": f"{strong_ratio:.3f}",
                 "max_language_preservation": str(
                     max_preservation
                 ),
@@ -570,6 +591,7 @@ def source_discovery() -> tuple[int, dict[str, str]]:
         "strong_threshold",
         "very_strong_threshold",
         "very_strong_content_ratio",
+        "strong_content_ratio",
         "max_language_preservation",
         "source_score",
         "direct_reference_diff",
@@ -712,7 +734,7 @@ def source_discovery() -> tuple[int, dict[str, str]]:
 
     print()
     print("=" * 72)
-    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 6")
+    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 7")
     print("=" * 72)
     print(f"Candidates: {len(rows_out):,}")
     print(
