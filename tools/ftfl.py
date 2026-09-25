@@ -76,6 +76,33 @@ REGRESSION_PHRASES = (
 )
 
 
+# Pass 8 is a scope cleanup rather than another threshold squeeze.
+# ui_* rows are internal/menu/script helper text, not authored spoken subtitles.
+NON_DIALOGUE_KEY_PREFIXES = (
+    "ui_",
+)
+
+# These openings identify short English questions/statements whose only
+# preserved token is usually a name or game term. They should not become
+# translation work merely because that name survives every localization.
+SHORT_ENGLISH_OPENINGS = (
+    "who is ",
+    "who's ",
+    "who’s ",
+    "what is ",
+    "what's ",
+    "what’s ",
+    "where is ",
+    "where's ",
+    "where’s ",
+    "you're ",
+    "you’re ",
+    "are you ",
+    "is this ",
+    "is that ",
+)
+
+
 def normalize(text: str) -> str:
     text = unicodedata.normalize("NFKC", text or "")
     text = (
@@ -204,6 +231,7 @@ def source_discovery() -> tuple[int, dict[str, str]]:
     rows_out: list[dict[str, str]] = []
     corpus_by_normalized_display: dict[str, tuple[str, str]] = {}
     reason_counts: Counter[str] = Counter()
+    excluded_counts: Counter[str] = Counter()
 
     with ALIGNMENT.open(
         "r",
@@ -255,6 +283,10 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                 display_norm,
                 (key, display),
             )
+
+            if key.casefold().startswith(NON_DIALOGUE_KEY_PREFIXES):
+                excluded_counts["non_dialogue_ui_key"] += 1
+                continue
 
             display_tokens = tokens(display)
 
@@ -407,6 +439,19 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                 if content_tokens
                 else 0.0
             )
+
+            # Short English questions/statements whose only distinctive
+            # preserved token is a name or game term are not translation work.
+            # Examples include "Who's Hanka?" or "What is chovgan?"
+            short_english_single_token = (
+                len(display_tokens) <= 6
+                and len(very_strong_meaningful) <= 1
+                and not signal_hits
+                and normalize(display).startswith(SHORT_ENGLISH_OPENINGS)
+            )
+            if short_english_single_token:
+                excluded_counts["short_english_name_or_term"] += 1
+                continue
 
             admitted = False
             reasons: list[str] = []
@@ -796,9 +841,17 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                 count,
             ])
 
+        for reason, count in sorted(
+            excluded_counts.items()
+        ):
+            writer.writerow([
+                f"excluded:{reason}",
+                count,
+            ])
+
     print()
     print("=" * 72)
-    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 7 + AUDIT SAMPLE")
+    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 8 (AUTHORED-DIALOGUE CLEANUP)")
     print("=" * 72)
     print(f"Candidates: {len(rows_out):,}")
     print(
@@ -823,6 +876,14 @@ def source_discovery() -> tuple[int, dict[str, str]]:
     print("Admission reasons:")
 
     for reason, count in reason_counts.most_common():
+        print(
+            f"  {reason:48} "
+            f"{count:>7,}"
+        )
+
+    print()
+    print("Scope exclusions:")
+    for reason, count in excluded_counts.most_common():
         print(
             f"  {reason:48} "
             f"{count:>7,}"
