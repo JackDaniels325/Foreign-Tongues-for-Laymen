@@ -384,12 +384,30 @@ def source_discovery() -> tuple[int, dict[str, str]]:
             admitted = False
             reasons: list[str] = []
 
-            # Primary source-driven route: at least two distinctive tokens are
-            # preserved strongly across official localizations.
-            if len(strong_meaningful) >= 2:
+            # Primary source-driven route. Two preserved tokens are useful,
+            # but pass 3 still admitted too many ordinary names/shared words.
+            # Tighten this route by requiring at least one token to be VERY
+            # strongly preserved, or independent corroboration from signals
+            # or an English-reference difference.
+            if (
+                len(strong_meaningful) >= 2
+                and (
+                    very_strong_meaningful
+                    or signal_hits
+                    or direct_reference_diff
+                )
+            ):
                 admitted = True
                 reasons.append(
-                    "two_strong_preserved_tokens"
+                    "corroborated_two_token_preservation"
+                )
+
+            # Three or more strong distinctive tokens are convincing enough on
+            # source evidence alone, even without secondary corroboration.
+            elif len(strong_meaningful) >= 3:
+                admitted = True
+                reasons.append(
+                    "three_strong_preserved_tokens"
                 )
 
             # Signal lists remain secondary evidence, but they can corroborate
@@ -403,9 +421,8 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                     "signal_support_plus_strong_preservation"
                 )
 
-            # English reference/display differences are useful, but the prior
-            # pass let this route admit far too much ordinary authored text.
-            # It now requires VERY strong cross-language preservation.
+            # English reference/display differences are useful, but they only
+            # qualify a single-token case when preservation is very strong.
             elif (
                 direct_reference_diff
                 and very_strong_meaningful
@@ -657,7 +674,7 @@ def source_discovery() -> tuple[int, dict[str, str]]:
 
     print()
     print("=" * 72)
-    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 3")
+    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 4")
     print("=" * 72)
     print(f"Candidates: {len(rows_out):,}")
     print(
