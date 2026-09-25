@@ -392,18 +392,8 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                     "two_strong_preserved_tokens"
                 )
 
-            # English authoring/reference text differs from player-facing text
-            # and at least one distinctive token is strongly preserved.
-            elif (
-                direct_reference_diff
-                and strong_meaningful
-            ):
-                admitted = True
-                reasons.append(
-                    "reference_difference_plus_strong_preservation"
-                )
-
-            # Hand-maintained signals only corroborate source evidence.
+            # Signal lists remain secondary evidence, but they can corroborate
+            # a single strongly preserved token in mixed-language dialogue.
             elif (
                 signal_hits
                 and strong_meaningful
@@ -413,10 +403,22 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                     "signal_support_plus_strong_preservation"
                 )
 
+            # English reference/display differences are useful, but the prior
+            # pass let this route admit far too much ordinary authored text.
+            # It now requires VERY strong cross-language preservation.
+            elif (
+                direct_reference_diff
+                and very_strong_meaningful
+            ):
+                admitted = True
+                reasons.append(
+                    "reference_difference_plus_very_strong_preservation"
+                )
+
             # Short greetings/exclamations can contain one distinctive foreign
             # token plus an interjection. Demand very strong preservation.
             elif (
-                len(display_tokens) <= 3
+                len(display_tokens) <= 4
                 and very_strong_meaningful
             ):
                 admitted = True
@@ -655,7 +657,7 @@ def source_discovery() -> tuple[int, dict[str, str]]:
 
     print()
     print("=" * 72)
-    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 2")
+    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 3")
     print("=" * 72)
     print(f"Candidates: {len(rows_out):,}")
     print(

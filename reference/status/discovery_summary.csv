@@ -1,10 +1,10 @@
 ﻿metric,value
-candidate_rows,14572
+candidate_rows,9783
 regression_phrases,8
 regression_failures,0
-reason:english_reference_differs,10785
-reason:reference_difference_plus_strong_preservation,6444
-reason:short_line_very_strong_preservation,634
+reason:english_reference_differs,5894
+reason:reference_difference_plus_very_strong_preservation,1454
+reason:short_line_very_strong_preservation,736
 reason:signal_support,2169
-reason:signal_support_plus_strong_preservation,32
+reason:signal_support_plus_strong_preservation,131
 reason:two_strong_preserved_tokens,7462
