@@ -58,6 +58,8 @@ The toolbox exists to remove that burden.
 
 A normal corpus update should come from the source localization data first. Human gameplay testing should be small and deliberate.
 
+Never ask for an in-game regression test when the same expected translation can already be verified as missing from the packaged XML.
+
 ## 3. Signal files are hints, not the universe
 
 Files such as:
