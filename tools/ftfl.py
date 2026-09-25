@@ -381,22 +381,45 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                 if preservation[token] >= very_strong_threshold
             ]
 
+            # Measure how much of the meaningful subtitle content is strongly
+            # preserved. This helps separate real foreign/code-switched lines
+            # from ordinary English sentences that happen to share two words
+            # across several official localizations.
+            content_tokens = [
+                token
+                for token in normalized_display_tokens
+                if (
+                    token
+                    and len(token) >= 3
+                    and token not in COMMON_ENGLISH
+                    and token not in proper_nouns
+                )
+            ]
+            content_tokens = list(dict.fromkeys(content_tokens))
+            very_strong_ratio = (
+                len(set(very_strong_meaningful)) / len(content_tokens)
+                if content_tokens
+                else 0.0
+            )
+
             admitted = False
             reasons: list[str] = []
 
-            # Pass 5: the generic two-token route was still the main source
-            # of noise. Two tokens now qualify only when BOTH are very strongly
-            # preserved, or when the pair is independently supported by a
-            # language signal. English reference/display differences no longer
-            # act as a free pass for ordinary two-token phrases.
+            # Pass 6: two very-strong tokens are no longer enough by
+            # themselves. They must make up at least half of the meaningful
+            # subtitle content. This keeps compact foreign phrases while
+            # dropping long ordinary-English lines with incidental overlap.
             if (
                 len(very_strong_meaningful) >= 2
+                and very_strong_ratio >= 0.50
             ):
                 admitted = True
                 reasons.append(
-                    "two_very_strong_preserved_tokens"
+                    "dense_two_very_strong_preserved_tokens"
                 )
 
+            # A language signal can still corroborate a two-token mixed line
+            # even when the subtitle also contains substantial English text.
             elif (
                 len(strong_meaningful) >= 2
                 and signal_hits
@@ -406,13 +429,18 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                     "signal_supported_two_token_preservation"
                 )
 
-            # Longer foreign phrases may not preserve every token at the
-            # highest ratio, so three strong distinctive tokens still qualify
-            # on source evidence alone.
-            elif len(strong_meaningful) >= 3:
+            # Longer source-driven foreign phrases qualify when at least three
+            # distinctive tokens are strongly preserved AND they represent a
+            # meaningful share of the subtitle.
+            elif (
+                len(strong_meaningful) >= 3
+                and (
+                    len(strong_meaningful) / max(len(content_tokens), 1)
+                ) >= 0.50
+            ):
                 admitted = True
                 reasons.append(
-                    "three_strong_preserved_tokens"
+                    "dense_three_strong_preserved_tokens"
                 )
 
             # Signal lists remain secondary evidence, but they can corroborate
@@ -426,16 +454,18 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                     "signal_support_plus_strong_preservation"
                 )
 
-            # English reference/display differences are still useful for
-            # single-token code-switches, but only when that token is very
-            # strongly preserved across official localizations.
+            # English reference/display differences are retained only for a
+            # very-strong token that occupies a substantial share of the
+            # meaningful subtitle content. This protects genuine one-fragment
+            # code-switches without reopening the broad reference-diff flood.
             elif (
                 direct_reference_diff
                 and very_strong_meaningful
+                and very_strong_ratio >= 0.50
             ):
                 admitted = True
                 reasons.append(
-                    "reference_difference_plus_very_strong_preservation"
+                    "dense_reference_difference_plus_very_strong_preservation"
                 )
 
             # Short greetings/exclamations can contain one distinctive foreign
@@ -498,6 +528,7 @@ def source_discovery() -> tuple[int, dict[str, str]]:
                 "very_strong_threshold": str(
                     very_strong_threshold
                 ),
+                "very_strong_content_ratio": f"{very_strong_ratio:.3f}",
                 "max_language_preservation": str(
                     max_preservation
                 ),
@@ -538,6 +569,7 @@ def source_discovery() -> tuple[int, dict[str, str]]:
         "available_languages",
         "strong_threshold",
         "very_strong_threshold",
+        "very_strong_content_ratio",
         "max_language_preservation",
         "source_score",
         "direct_reference_diff",
@@ -680,7 +712,7 @@ def source_discovery() -> tuple[int, dict[str, str]]:
 
     print()
     print("=" * 72)
-    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 5")
+    print("FTFL SOURCE-DRIVEN DISCOVERY - FILTER PASS 6")
     print("=" * 72)
     print(f"Candidates: {len(rows_out):,}")
     print(
