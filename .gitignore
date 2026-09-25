@@ -1,11 +1,17 @@
 # Rosetta generated/extracted reference data
 reference/localization/*/text_ui_dialog.xml
-reference/aligned/*.csv
+reference/aligned/localization_alignment.csv
+
+# Large/generated analysis outputs
+reference/aligned/code_switch_candidates.csv
+reference/aligned/translation_need_review.csv
+reference/aligned/priority_nomad_yiddish_sweep.csv
+reference/aligned/unresolved_families.csv
 
 # Generated FTFL build artifacts
 build/
-mod/foreign_tongues_for_laymen/
 dist/*.zip
+mod/foreign_tongues_for_laymen/Localization/English_xml.pak
 
 # Python cache
 tools/__pycache__/
