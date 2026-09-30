@@ -26,6 +26,7 @@ import csv
 import importlib
 import io
 import re
+import shutil
 import sys
 import unicodedata
 import zipfile
@@ -1358,6 +1359,150 @@ def write_unresolved_report() -> int:
     return len(output_rows)
 
 
+def import_review_file(review_path: Path) -> int:
+    """
+    Merge reviewed translation rows into corpus/approved.csv.
+
+    The review file uses the same core schema as approved.csv. An optional
+    review_status column may be present; if it is present, only rows marked
+    APPROVED, READY_FOR_CORPUS, or IMPORT are merged.
+    """
+    review_path = review_path.resolve()
+
+    if not review_path.is_file():
+        raise SystemExit(f"Review file not found: {review_path}")
+
+    required = {
+        "localization_key",
+        "speaker_context",
+        "original_display_text",
+        "foreign_fragment",
+        "source_language",
+        "verified_meaning",
+        "line_type",
+        "reference_source",
+        "test_status",
+        "notes",
+    }
+
+    with review_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames:
+            raise SystemExit("Review file has no header")
+        missing = required - set(reader.fieldnames)
+        if missing:
+            raise SystemExit(
+                "Review file missing columns: " + ", ".join(sorted(missing))
+            )
+        review_rows = list(reader)
+
+    with APPROVED.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames:
+            raise SystemExit("approved.csv has no header")
+        approved_fields = list(reader.fieldnames)
+        approved_rows = list(reader)
+
+    if set(approved_fields) != required:
+        # Keep the on-disk approved.csv column order, but ensure every required
+        # field exists. Extra columns are allowed for forward compatibility.
+        missing = required - set(approved_fields)
+        if missing:
+            raise SystemExit(
+                "approved.csv missing columns: " + ", ".join(sorted(missing))
+            )
+
+    existing_by_key = {
+        (row.get("localization_key") or "").strip(): row
+        for row in approved_rows
+        if (row.get("localization_key") or "").strip()
+    }
+
+    accepted_statuses = {"", "APPROVED", "READY_FOR_CORPUS", "IMPORT"}
+    seen_review: set[str] = set()
+    additions: list[dict[str, str]] = []
+    skipped_existing = 0
+    skipped_status = 0
+    conflicts: list[str] = []
+
+    for row in review_rows:
+        status = (row.get("review_status") or "").strip().upper()
+        if status not in accepted_statuses:
+            skipped_status += 1
+            continue
+
+        key = (row.get("localization_key") or "").strip()
+        original = (row.get("original_display_text") or "").strip()
+        meaning = (row.get("verified_meaning") or "").strip()
+        line_type = (row.get("line_type") or "").strip().lower()
+        fragment = (row.get("foreign_fragment") or "").strip()
+
+        if not key:
+            conflicts.append("blank localization_key")
+            continue
+        if key in seen_review:
+            conflicts.append(f"duplicate review key: {key}")
+            continue
+        seen_review.add(key)
+
+        if not original:
+            conflicts.append(f"{key}: blank original_display_text")
+            continue
+        if not meaning:
+            conflicts.append(f"{key}: blank verified_meaning")
+            continue
+        if line_type not in MIXED_TYPES | FULL_TYPES:
+            conflicts.append(f"{key}: unsupported line_type '{line_type}'")
+            continue
+        if line_type in MIXED_TYPES and not fragment:
+            conflicts.append(f"{key}: mixed row requires foreign_fragment")
+            continue
+
+        if key in existing_by_key:
+            # Existing corpus always wins. Broad review batches may overlap
+            # previously approved playtest rows; importing them again should
+            # be harmless rather than blocking the whole batch.
+            skipped_existing += 1
+            continue
+
+        additions.append({field: row.get(field, "") for field in approved_fields})
+
+    if conflicts:
+        print()
+        print("IMPORT BLOCKED - review conflicts found:")
+        for conflict in conflicts[:50]:
+            print(f"  - {conflict}")
+        if len(conflicts) > 50:
+            print(f"  ... and {len(conflicts) - 50} more")
+        raise SystemExit(
+            "Fix the review file or existing corpus conflicts before importing."
+        )
+
+    backup = APPROVED.with_name("approved.pre-import.bak.csv")
+    shutil.copy2(APPROVED, backup)
+
+    merged = approved_rows + additions
+
+    with APPROVED.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=approved_fields)
+        writer.writeheader()
+        writer.writerows(merged)
+
+    print()
+    print("=" * 72)
+    print("FTFL REVIEW IMPORT")
+    print("=" * 72)
+    print(f"Review file: {review_path}")
+    print(f"Backup:      {backup.relative_to(REPO)}")
+    print(f"Existing:    {len(approved_rows):,}")
+    print(f"Added:       {len(additions):,}")
+    print(f"Skipped existing identical rows: {skipped_existing:,}")
+    print(f"Skipped non-approved review rows: {skipped_status:,}")
+    print(f"New corpus total: {len(merged):,}")
+
+    return len(additions)
+
+
 def run_scan() -> int:
     source_discovery()
     return write_unresolved_report()
@@ -1593,6 +1738,20 @@ def main() -> int:
         ),
     )
 
+    import_parser = sub.add_parser(
+        "import-review",
+        help=(
+            "Validate and merge a reviewed translation CSV "
+            "into corpus/approved.csv"
+        ),
+    )
+    import_parser.add_argument(
+        "--file",
+        required=True,
+        type=Path,
+        help="Reviewed translation CSV to import",
+    )
+
     build_parser = sub.add_parser(
         "build",
         help=(
@@ -1649,6 +1808,11 @@ def main() -> int:
             f"{unresolved:,} unresolved families"
         )
 
+        return 0
+
+    if args.command == "import-review":
+        added = import_review_file(args.file)
+        print(f"\nIMPORT COMPLETE - {added:,} new approved rows")
         return 0
 
     if args.command == "build":
