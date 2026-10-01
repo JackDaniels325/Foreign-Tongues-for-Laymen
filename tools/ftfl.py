@@ -1358,6 +1358,19 @@ def write_unresolved_report() -> int:
 
     return len(output_rows)
 
+MIXED_TYPES = {
+    "mixed",
+    "mixed_language",
+    "mixed-language",
+    "inline",
+}
+
+FULL_TYPES = {
+    "full",
+    "full_foreign",
+    "full-foreign",
+    "foreign",
+}
 
 def import_review_file(review_path: Path) -> int:
     """
